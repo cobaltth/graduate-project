@@ -52,7 +52,7 @@ def adam_update(grad, buf1, buf2, step, betas, eps):
     return buf1c / (buf2c.sqrt() + eps)
 
 
-class AdaMuon_optimizer(torch.optim.Optimizer):
+class AdaMuon(torch.optim.Optimizer):
     def __init__(self, param_groups):
         for group in param_groups:
             assert "use_muon" in group

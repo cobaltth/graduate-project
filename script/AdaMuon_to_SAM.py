@@ -16,7 +16,7 @@ from utils.step_lr import StepLRforWRN, MultiStepLR
 from utils.avgmeter import MetricTracker
 from utils.tools import evaluation
 from utils.SAM import SAM, disable_running_stats, enable_running_stats, smooth_crossentropy
-from utils.AdaMuon import AdaMuon_optimizer
+from utils.AdaMuon import AdaMuon
 
 
 def train(save_path: str,
@@ -87,7 +87,7 @@ def train(save_path: str,
             "weight_decay": weight_decay,
         },
     ]
-    AdaMuon_opt = AdaMuon_optimizer(param_groups)
+    AdaMuon_optimizer = AdaMuon(param_groups)
 
     base_optimizer = torch.optim.SGD
     SAM_optimizer = SAM(
@@ -120,9 +120,9 @@ def train(save_path: str,
         # when switching from AdaMuon (ERM) to SAM, reset momentum
         if isSAM and not sam_initialized:
             logger.info("Switching AdaMuon to SAM: resetting momentum buffers")
-            for group in AdaMuon_opt.param_groups:
+            for group in AdaMuon_optimizer.param_groups:
                 for p in group["params"]:
-                    state = AdaMuon_opt.state.get(p, {})
+                    state = AdaMuon_optimizer.state.get(p, {})
                     if "momentum_buffer" in state:
                         state["momentum_buffer"].zero_()
                     if "second_momentum_buffer" in state:
@@ -152,9 +152,9 @@ def train(save_path: str,
             ).mean()
 
             if not isSAM:
-                AdaMuon_opt.zero_grad()
+                AdaMuon_optimizer.zero_grad()
                 loss.backward()
-                AdaMuon_opt.step()
+                AdaMuon_optimizer.step()
             else:
                 SAM_optimizer.zero_grad()
                 loss.backward()
@@ -181,7 +181,7 @@ def train(save_path: str,
             "epoch": epoch,
         })
 
-        scheduler(AdaMuon_opt, epoch)
+        scheduler(AdaMuon_optimizer, epoch)
         scheduler(SAM_optimizer, epoch)
 
         if epoch == epochs - 1:

@@ -115,7 +115,7 @@ def train(save_path: str,
         set_seed(seeds[epoch])
 
         isSAM = start_SAM <= epoch <= end_SAM
-        logger.info("Is SAM" if isSAM else "Is ERM")
+        logger.info("Is SAM" if isSAM else "Is AdaMuon")
 
         # when switching from AdaMuon (ERM) to SAM, reset momentum
         if isSAM and not sam_initialized:

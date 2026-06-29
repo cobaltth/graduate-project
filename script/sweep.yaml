@@ -12,12 +12,12 @@ metric:
 
 parameters:
   epochs:
-    value: 200
+    value: 120
 
   lr:
     distribution: log_uniform_values
-    min: 0.001
-    max: 0.1
+    min: 0.0001
+    max: 0.01
 
   bs:
     values: [64, 128, 256]
@@ -26,19 +26,19 @@ parameters:
     value: 5e-4
 
   start_SAM:
-    value: 175
+    value: 100
 
   end_SAM:
-    value: 200
+    value: 120
 
   rho:
-    values: [0.05, 0.1, 0.2, 0.5, 1.0]
+    values: [0.1, 0.2, 0.5, 1.0, 2.0]
 
   adaptive:
     value: true
 
-  step_size:
-    value: "60 120"
+  # step_size:
+    # value: "60 120"
 
   step_saving:
-    value: 200
+    value: 120

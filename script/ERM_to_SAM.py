@@ -253,17 +253,17 @@ def main():
     # get the args.
     args = add_args()
 
-    # wandb.init(project="AdaMuon_to_SAM", config=args)
-    # config = wandb.config
+    wandb.init(project="AdaMuon_to_SAM", config=args)
+    config = wandb.config
 
-    # for key, value in config.as_dict().items():
-    #     if key == "step_size":
-    #         continue            
-    #     setattr(args, key, value)
+    for key, value in config.as_dict().items():
+        if key == "step_size":
+            continue            
+        setattr(args, key, value)
     
-    # # parsing needed
-    # if "step_size" in config:
-    #     args.step_size = [int(x) for x in config.step_size.split()]
+    # parsing needed
+    if "step_size" in config:
+        args.step_size = [int(x) for x in config.step_size.split()]
 
     # set the logger
     set_logger(args.save_path)

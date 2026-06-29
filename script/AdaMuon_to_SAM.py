@@ -4,15 +4,18 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import argparse
 import random
 import torch
+import wandb
+import math
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
+from torch.optim.lr_scheduler import LambdaLR
 
 from data import prepare_dataset
 from model import prepare_model
 from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
-from utils.step_lr import StepLRforWRN, MultiStepLR
+from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
 from utils.avgmeter import MetricTracker
 from utils.tools import evaluation
 from utils.SAM import SAM, disable_running_stats, enable_running_stats, smooth_crossentropy
@@ -101,7 +104,8 @@ def train(save_path: str,
         logger.info("Notice: switch to the WideResNet default scheduler.")
         scheduler = StepLRforWRN(lr, epochs)
     else:
-        scheduler = MultiStepLR(lr, step_size, gamma=0.1)
+        # scheduler = MultiStepLR(lr, step_size, gamma=0.1)
+        scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))
 
     ## set up the data part
     testloader = DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
@@ -262,6 +266,19 @@ def add_args() -> argparse.Namespace:
 def main():
     # get the args.
     args = add_args()
+
+    # wandb.init(project="AdaMuon_to_SAM", config=args)
+    # config = wandb.config
+
+    # for key, value in config.as_dict().items():
+    #     if key == "step_size":
+    #         continue            
+    #     setattr(args, key, value)
+    
+    # # parsing needed
+    # if "step_size" in config:
+    #     args.step_size = [int(x) for x in config.step_size.split()]
+
     # set the logger
     set_logger(args.save_path)
     # get the logger

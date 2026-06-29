@@ -185,8 +185,6 @@ def train(save_path: str,
             "epoch": epoch,
         })
         wandb.log({
-            "train_loss": tracker.history["train_loss"][-1],
-            "train_acc": tracker.history["train_acc"][-1],
             "test_loss": test_loss,
             "test_acc": test_acc,
             "epoch": epoch,
@@ -284,7 +282,7 @@ def main():
     
     # parsing needed
     if "step_size" in config:
-        args.step_size = [int(x) for x in config.step_size.split()]
+        args.step_size = [int(x) for x in config.step_size]
 
     # set the logger
     set_logger(args.save_path)
@@ -333,6 +331,8 @@ def main():
           step_size = args.step_size,
           step_saving = args.step_saving,
           seed = args.seed)
+
+    wandb.finish()
 
 if __name__ == "__main__":
     main()

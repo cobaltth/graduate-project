@@ -4,13 +4,21 @@ metric:
   name: test_acc
   goal: maximize
 
-# command:
-#   - ${env}
-#   - python
-#   - ${program}
-#   - ${args_no_boolean_flags}
+# early_terminate:
+#   type: hyperband
+#   min_iter: 20
+#   eta: 2
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_boolean_flags}
 
 parameters:
+  model:
+    value: "resnet18"
+  
   epochs:
     value: 120
 

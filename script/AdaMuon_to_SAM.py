@@ -184,6 +184,13 @@ def train(save_path: str,
             "test_acc": test_acc,
             "epoch": epoch,
         })
+        wandb.log({
+            "train_loss": tracker.history["train_loss"][-1],
+            "train_acc": tracker.history["train_acc"][-1],
+            "test_loss": test_loss,
+            "test_acc": test_acc,
+            "epoch": epoch,
+        })
 
         scheduler(AdaMuon_optimizer, epoch)
         scheduler(SAM_optimizer, epoch)

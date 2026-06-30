@@ -4,10 +4,10 @@ metric:
   name: test_acc
   goal: maximize
 
-early_terminate:
-  type: hyperband
-  min_iter: 20
-  eta: 3
+# early_terminate:
+#   type: hyperband
+#   min_iter: 20
+#   eta: 3
 
 command:
   - ${env}
@@ -17,30 +17,33 @@ command:
 
 parameters:
   model:
-    value: "ResNet18"
+    value: "WideResNet16_8"
   
   epochs:
-    value: 120
+    value: 200
 
   lr:
     distribution: log_uniform_values
-    min: 0.0001
+    min: 0.001
     max: 0.01
 
   bs:
-    values: [64, 128, 256]
+    # values: [64, 128, 256]
+    value: 256
 
   wd:
     value: 5e-4
 
   start_SAM:
-    value: 100
+    # values: [90, 100, 110]
+    value: 175
 
   end_SAM:
-    value: 120
+    value: 200
 
   rho:
-    values: [0.1, 0.2, 0.5, 1.0, 2.0]
+    # values: [0.2, 0.5, 1.0]
+    value: 1.0
 
   adaptive:
     value: true
@@ -49,4 +52,4 @@ parameters:
     # value: "60 120"
 
   step_saving:
-    value: 120
+    value: 200

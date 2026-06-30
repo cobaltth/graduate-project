@@ -102,7 +102,8 @@ def train(save_path: str,
     # set the scheduler
     if model.__class__.__name__ == "WideResNet":
         logger.info("Notice: switch to the WideResNet default scheduler.")
-        scheduler = StepLRforWRN(lr, epochs)
+        # scheduler = StepLRforWRN(lr, epochs)
+        scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))
     else:
         # scheduler = MultiStepLR(lr, step_size, gamma=0.1)
         scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))

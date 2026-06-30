@@ -2,25 +2,32 @@ from typing import List
 import math
 
 class StepLRforWRN:
-    def __init__(self, learning_rate: float, total_epochs: int):
-        """_summary_
+    def __init__(self, learning_rate: float, total_epochs: int, first_decay: float = 0.2, second_decay: float = 0.2, milestones=(3/10, 6/10)):
+        """Step LR for WideResNet with configurable decay factors and epoch fractions.
 
         Args:
-            learning_rate (float): _description_
-            total_epochs (int): _description_
+            learning_rate (float): base learning rate
+            total_epochs (int): total number of epochs
+            first_decay (float): multiplicative factor applied at first milestone (e.g. 0.2)
+            second_decay (float): multiplicative factor applied at second milestone (applied after first_decay)
+            milestones (tuple): two fractions of total_epochs for first and second decay (e.g. (0.3, 0.6))
         """
         self.total_epochs = total_epochs
         self.base = learning_rate
+        self.first_decay = first_decay
+        self.second_decay = second_decay
+        self.milestone_fracs = milestones
 
     def __call__(self, optimizer, epoch):
-        if epoch < self.total_epochs * 3/10:
+        first_cut = self.total_epochs * self.milestone_fracs[0]
+        second_cut = self.total_epochs * self.milestone_fracs[1]
+
+        if epoch < first_cut:
             lr = self.base
-        elif epoch < self.total_epochs * 6/10:
-            lr = self.base * 0.2
-        # elif epoch < self.total_epochs * 8/10:
-        #     lr = self.base * 0.2 ** 2
+        elif epoch < second_cut:
+            lr = self.base * self.first_decay
         else:
-            lr = self.base * 0.2 ** 2
+            lr = self.base * self.first_decay * self.second_decay
 
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr

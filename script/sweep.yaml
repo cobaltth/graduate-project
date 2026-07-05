@@ -17,10 +17,12 @@ command:
 
 parameters:
   model:
-    value: "WideResNet16_8"
+    # value: "WideResNet16_8"
+    value: "ResNet18"
   
   epochs:
-    value: 200
+    # value: 200
+    value: 120
 
   lr:
     distribution: log_uniform_values
@@ -36,14 +38,14 @@ parameters:
 
   start_SAM:
     # values: [90, 100, 110]
-    value: 175
+    value: 0
 
   end_SAM:
-    value: 200
+    value: 120
 
   rho:
-    # values: [0.2, 0.5, 1.0]
-    value: 1.0
+    values: [0.2, 0.5, 1.0]
+    # value: 1.0
 
   adaptive:
     value: true
@@ -52,4 +54,4 @@ parameters:
     # value: "60 120"
 
   step_saving:
-    value: 200
+    value: 120

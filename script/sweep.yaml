@@ -4,10 +4,10 @@ metric:
   name: test_acc
   goal: maximize
 
-# early_terminate:
-#   type: hyperband
-#   min_iter: 20
-#   eta: 3
+early_terminate:
+  type: hyperband
+  min_iter: 20
+  eta: 3
 
 command:
   - ${env}

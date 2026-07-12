@@ -55,3 +55,8 @@ parameters:
 
   step_saving:
     value: 120
+
+  seed:
+    distribution: int_bounds
+    min: 1
+    max: 10000

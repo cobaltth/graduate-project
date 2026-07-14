@@ -1,5 +1,5 @@
 program: AdaMuon_plus_SAM.py
-method: random
+method: grid
 metric:
   name: test_acc
   goal: maximize
@@ -36,14 +36,7 @@ parameters:
 
   wd:
     value: 5e-4
-
-  # start_SAM:
-    # values: [90, 100, 110]
-    # value: 0
-
-  # end_SAM:
-    # value: 120
-
+    
   rho:
     # values: [2.0, 5.0]
     value: 5.0
@@ -52,6 +45,4 @@ parameters:
     value: true
 
   seed:
-    distribution: int_bounds
-    min: 1
-    max: 10000
+    values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]

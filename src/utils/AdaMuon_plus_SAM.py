@@ -3,37 +3,6 @@ from AdaMuon import zeropower_via_newtonschulz5, adamuon_update, adam_update
 
 
 class AdaMuon_plus_SAM(torch.optim.Optimizer):
-    """
-    AdaMuon + Sharpness-Aware Minimization.
-
-    SAM.py의 2-step 절차를 그대로 따르되, base_optimizer.step() 대신
-    AdaMuon의 update 로직(momentum / second_momentum / Newton-Schulz)을 사용한다.
-
-    사용 방식:
-
-        optimizer = AdaMuon_plus_SAM(param_groups, rho=0.05, adaptive=False)
-
-        # --- 1st forward-backward: w 지점의 gradient로 perturbation 계산 ---
-        loss = criterion(model(inputs), targets)
-        loss.backward()
-        optimizer.first_step(zero_grad=True)   # w -> w + e(w)
-
-        # --- 2nd forward-backward: w + e(w) 지점에서 gradient 재계산 ---
-        criterion(model(inputs), targets).backward()
-        optimizer.second_step(zero_grad=True)  # w + e(w) -> w, 이후 AdaMuon update
-
-    흐름:
-        1. first_step  : 현재 grad로 e(w) 계산 후 w -> w + e(w) 로 이동 (SAM.py와 동일)
-        2. (사용자가 직접) w + e(w) 지점에서 forward/backward 재수행
-                         -> p.grad 에는 "perturbation이 적용된 gradient"가 담김
-        3. second_step : w + e(w) -> w 로 복원한 뒤,
-                         2번에서 얻은 perturbed gradient를 AdaMuon update에 사용
-
-    BatchNorm을 쓰는 모델이라면 SAM 관례대로, 1st pass는
-    enable_running_stats(model), 2nd pass는 disable_running_stats(model)를
-    호출한 뒤 진행하는 것을 권장한다 (SAM.py에 정의된 헬퍼 사용 가능).
-    """
-
     def __init__(self, param_groups, rho=0.05, adaptive=False):
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
 
@@ -63,9 +32,6 @@ class AdaMuon_plus_SAM(torch.optim.Optimizer):
 
         super().__init__(param_groups, dict())
 
-    # ---------------------------------------------------------------
-    # Step 1: climb to w + e(w)   (SAM.py의 first_step과 동일)
-    # ---------------------------------------------------------------
     @torch.no_grad()
     def first_step(self, zero_grad=False):
         grad_norm = self._grad_norm()
@@ -81,9 +47,6 @@ class AdaMuon_plus_SAM(torch.optim.Optimizer):
         if zero_grad:
             self.zero_grad()
 
-    # ---------------------------------------------------------------
-    # Step 2: w + e(w) -> w 복원 후, perturbed gradient로 AdaMuon 업데이트
-    # ---------------------------------------------------------------
     @torch.no_grad()
     def second_step(self, zero_grad=False):
         # restore w  (perturbed gradient는 p.grad에 이미 담겨있음)
@@ -107,7 +70,7 @@ class AdaMuon_plus_SAM(torch.optim.Optimizer):
                         )
 
                     update = adamuon_update(
-                        p.grad,  # perturbed gradient (w + e(w) 지점에서 계산됨)
+                        p.grad,
                         state["momentum_buffer"],
                         state["second_momentum_buffer"],
                         beta=group["momentum"],

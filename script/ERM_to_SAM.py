@@ -258,7 +258,7 @@ def main():
     # get the args.
     args = add_args()
 
-    wandb.init(project="AdaMuon_to_SAM", config=args)
+    wandb.init(project="ERM_to_SAM", config=args)
     config = wandb.config
 
     for key, value in config.as_dict().items():

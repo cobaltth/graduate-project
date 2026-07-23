@@ -53,14 +53,6 @@ def train(save_path: str,
         batch_size: the batch size
         weight_decay: the weight decay
         momentum: the momentum
-        start_SAM: (더 이상 사용되지 않음) 과거 AdaMuon -> SAM 전환 시작 epoch.
-            optimizer switching을 없애면서 학습 로직에서는 쓰이지 않지만,
-            argparse 인터페이스(main()의 호출부)를 그대로 유지하기 위해
-            함수 시그니처에는 남겨둠.
-        end_SAM: (더 이상 사용되지 않음) 위와 동일한 이유로 유지되는 인자.
-        rho: the rho for AdaMuon_plus_SAM's SAM-style perturbation
-            (기존에는 별도의 SAM optimizer가 사용하던 값. 이제는
-            AdaMuon_plus_SAM 생성 시 그대로 전달되어 사용됨)
         adaptive: the adaptive for AdaMuon_plus_SAM
         label_smoothing: the label smoothing
         step_size: the StepLR's step size
@@ -92,7 +84,7 @@ def train(save_path: str,
         },
     ]
 
-    optimizer = AdaMuon(param_groups, rho=rho, adaptive=adaptive)
+    optimizer = AdaMuon(param_groups)
 
     scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))
 
@@ -222,7 +214,7 @@ def main():
     # get the args.
     args = add_args()
 
-    wandb.init(project="AdaMuon_plus_SAM", config=args)
+    wandb.init(project="AdaMuon", config=args)
     config = wandb.config
 
     for key, value in config.as_dict().items():

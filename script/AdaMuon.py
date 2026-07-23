@@ -110,7 +110,7 @@ def train(save_path: str,
 
             optimizer.zero_grad()
             loss.backward()
-            optimizer.step(zero_grad=True)
+            optimizer.step()
 
             tracker.update({
                 "train_loss": loss.item(),

@@ -1,5 +1,5 @@
-program: AdaMuon_plus_SAM.py
-method: grid
+program: AdaMuon.py
+method: bayes
 metric:
   name: test_acc
   goal: maximize
@@ -25,9 +25,9 @@ parameters:
     value: 120
 
   lr:
-    # distribution: log_uniform_values
-    # min: 2e-3
-    # max: 5e-3
+    distribution: log_uniform_values
+    min: 2e-4
+    max: 2e-2
     value: 2e-3
 
   bs:
@@ -37,12 +37,12 @@ parameters:
   wd:
     value: 5e-4
     
-  rho:
+  # rho:
     # values: [2.0, 5.0]
-    value: 5.0
+    # value: 5.0
 
   adaptive:
     value: true
 
-  seed:
-    values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  # seed:
+    # values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]

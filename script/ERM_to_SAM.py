@@ -225,7 +225,7 @@ def add_args() -> argparse.Namespace:
                         help="set the adaptive for SAM")
     parser.add_argument("--label_smoothing", default=0.1, type=float,
                         help="set the label smoothing")
-    parser.add_argument("--step_size", default=[80, 160], type=int, nargs="+",
+    parser.add_argument("--step_size", default=[160, 160], type=int, nargs="+",
                         help="set the StepLR stepsize")
     parser.add_argument("--step_saving", default=160, type=int,
                         help="set the steps to save the model")

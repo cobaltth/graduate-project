@@ -29,7 +29,7 @@ parameters:
     # min: 1e-4
     # max: 1e-2
     # value: 2e-3
-    values: [3e-2, 1e-1]
+    values: [1e-2, 3e-2, 1e-1]
 
   bs:
     # values: [128, 256]

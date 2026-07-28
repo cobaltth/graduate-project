@@ -1,13 +1,13 @@
 program: ERM_to_SAM.py
-method: bayes
+method: grid
 metric:
   name: test_acc
   goal: maximize
 
-early_terminate:
-  type: hyperband
-  min_iter: 20
-  eta: 3
+# early_terminate:
+#   type: hyperband
+#   min_iter: 20
+#   eta: 3
 
 command:
   - ${env}
@@ -25,10 +25,11 @@ parameters:
     value: 120
 
   lr:
-    distribution: log_uniform_values
-    min: 1e-4
-    max: 1e-1
+    # distribution: log_uniform_values
+    # min: 1e-4
+    # max: 1e-2
     # value: 2e-3
+    values: [3e-2, 1e-1]
 
   bs:
     # values: [128, 256]
@@ -38,7 +39,7 @@ parameters:
     value: 5e-4
     
   rho:
-    values: [0.1, 0.5, 1.0, 2.0, 5.0]
+    values: [1.0, 2.0, 5.0]
     # value: 5.0
 
   adaptive:

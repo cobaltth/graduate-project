@@ -2,5 +2,7 @@
 
 Muon의 고질적인 문제인 lr fine tuning문제를 해결하기 위해 AdaMuon을 채택했다.
 
-SAM-in-Late-Phase 논문을 benchmark 기준으로 하여 성능을 향상시키는 Optimizer를 구현했다. 
+모든 실험의 SAM은 Adaptive SAM(ASAM)을 사용했다.
+
+SAM-in-Late-Phase 논문을 benchmark 기준으로 하여 성능이 향상된 Optimizer를 구현했다. 
 github link: https://github.com/zzp1012/SAM-in-Late-Phase.git

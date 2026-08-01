@@ -18,8 +18,6 @@ from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
 from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
 from utils.avgmeter import MetricTracker
 from utils.tools import evaluation
-# SAM 클래스 자체(및 AdaMuon 단독 클래스)는 더 이상 쓰지 않음.
-# disable/enable_running_stats, smooth_crossentropy는 여전히 필요한 유틸 함수라 그대로 사용.
 from utils.SAM import disable_running_stats, enable_running_stats, smooth_crossentropy
 from utils.AdaMuon_plus_SAM import AdaMuon_plus_SAM
 

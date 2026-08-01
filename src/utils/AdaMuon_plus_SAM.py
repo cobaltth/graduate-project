@@ -1,5 +1,5 @@
 import torch
-from AdaMuon import zeropower_via_newtonschulz5, adamuon_update, adam_update
+from utils.AdaMuon import zeropower_via_newtonschulz5, adamuon_update, adam_update
 
 
 class AdaMuon_plus_SAM(torch.optim.Optimizer):

@@ -17,7 +17,7 @@ from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
 from utils.step_lr import StepLRforWRN, MultiStepLR
 from utils.avgmeter import MetricTracker
-from utils.tools import evaluation
+from utils.tools import evaluation, get_weight_norm
 from utils.SAM import SAM, disable_running_stats, enable_running_stats, smooth_crossentropy
 
 def train(save_path: str,
@@ -157,20 +157,22 @@ def train(save_path: str,
         # print the train loss and accuracy
         logger.info(tracker)
 
-        # eval on the testset
         test_loss, test_acc, _ = evaluation(device, model, testloader)
-        # print the test loss and accuracy
         logger.info(f"test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}")
 
-        # update the tracker
+        weight_norm = get_weight_norm(model)
+
         tracker.track({
             "test_loss": test_loss,
             "test_acc": test_acc,
+            "weight_norm": weight_norm,
             "epoch": epoch,
         })
+
         wandb.log({
             "test_loss": test_loss,
             "test_acc": test_acc,
+            "weight_norm": weight_norm,
             "epoch": epoch,
         })
 

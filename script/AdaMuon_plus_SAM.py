@@ -17,7 +17,7 @@ from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
 from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
 from utils.avgmeter import MetricTracker
-from utils.tools import evaluation
+from utils.tools import evaluation, get_weight_norm
 from utils.SAM import disable_running_stats, enable_running_stats, smooth_crossentropy
 from utils.AdaMuon_plus_SAM import AdaMuon_plus_SAM
 
@@ -299,15 +299,6 @@ def main():
           seed = args.seed)
 
     wandb.finish()
-
-def get_weight_norm(model):
-    total_norm_sq = 0.0
-
-    for p in model.parameters():
-        if p.requires_grad:
-            total_norm_sq += p.detach().norm(2).item() ** 2
-
-    return total_norm_sq ** 0.5
 
 if __name__ == "__main__":
     main()

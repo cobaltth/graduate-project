@@ -15,7 +15,7 @@ from data import prepare_dataset
 from model import prepare_model
 from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
-from utils.step_lr import StepLRforWRN, MultiStepLR
+from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
 from utils.avgmeter import MetricTracker
 from utils.tools import evaluation, get_weight_norm
 from utils.SAM import SAM, disable_running_stats, enable_running_stats, smooth_crossentropy
@@ -85,9 +85,16 @@ def train(save_path: str,
     # set the scheduler
     if model.__class__.__name__ == "WideResNet":
         logger.info("Notice: switch to the WideResNet default scheduler.")
-        scheduler = StepLRforWRN(lr, epochs)
+        if start_SAM:
+            scheduler = StepLRforWRN(lr, epochs)
+        else:
+            scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))
+
     else:
-        scheduler = MultiStepLR(lr, step_size, gamma=0.2)
+        if start_SAM:
+            scheduler = MultiStepLR(lr, step_size, gamma=0.2)
+        else:
+            scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))
     
     ## set up the data part
     # set the testset loader 

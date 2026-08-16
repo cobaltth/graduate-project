@@ -141,14 +141,19 @@ def train(save_path: str,
         test_loss, test_acc, _ = evaluation(device, model, testloader)
         logger.info(f"test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}")
 
+        weight_norm = get_weight_norm(model)
+
         tracker.track({
             "test_loss": test_loss,
             "test_acc": test_acc,
+            "weight_norm": weight_norm,
             "epoch": epoch,
         })
+
         wandb.log({
             "test_loss": test_loss,
             "test_acc": test_acc,
+            "weight_norm": weight_norm,
             "epoch": epoch,
         })
 
@@ -294,6 +299,15 @@ def main():
           seed = args.seed)
 
     wandb.finish()
+
+def get_weight_norm(model):
+    total_norm_sq = 0.0
+
+    for p in model.parameters():
+        if p.requires_grad:
+            total_norm_sq += p.detach().norm(2).item() ** 2
+
+    return total_norm_sq ** 0.5
 
 if __name__ == "__main__":
     main()

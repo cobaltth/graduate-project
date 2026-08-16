@@ -22,7 +22,7 @@ parameters:
   
   epochs:
     # value: 200
-    value: 120
+    value: 40
 
   lr:
     # distribution: log_uniform_values

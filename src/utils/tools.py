@@ -100,3 +100,12 @@ def evaluation(device: torch.device,
     test_loss = np.mean(test_losses)
     test_acc /= len(testloader.dataset)
     return test_loss, test_acc, np.array(predictions)
+
+def get_weight_norm(model):
+    total_norm_sq = 0.0
+
+    for p in model.parameters():
+        if p.requires_grad:
+            total_norm_sq += p.detach().norm(2).item() ** 2
+
+    return total_norm_sq ** 0.5

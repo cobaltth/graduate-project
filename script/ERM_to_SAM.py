@@ -96,7 +96,6 @@ def train(save_path: str,
         else:
             scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))
 
-    
     ## set up the data part
     # set the testset loader 
     testloader = DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)

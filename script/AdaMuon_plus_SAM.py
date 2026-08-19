@@ -255,6 +255,7 @@ def main():
     # get the logger
     logger = get_logger(__name__, args.verbose)
     # set the seed
+    args.seed = random.SystemRandom().randint(0, 2**31 - 1) # true random
     set_seed(args.seed)
     # set the device
     args.device = set_device(args.device)

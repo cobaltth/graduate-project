@@ -14,7 +14,7 @@ from data import prepare_dataset
 from model import prepare_model
 from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
-from utils.step_lr import StepLRforWRN, MultiStepLR
+from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
 from utils.avgmeter import MetricTracker
 from utils.tools import evaluation
 from utils.SAM import smooth_crossentropy
@@ -57,18 +57,13 @@ def train(save_path: str,
     # put the model to GPU or CPU
     model = model.to(device)
     # set the optimizer
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.AdamW(
         filter(lambda p: p.requires_grad, model.parameters()), 
-        lr=lr, weight_decay=weight_decay, momentum=momentum
+        lr=lr, weight_decay=weight_decay
     )
 
-    # set the scheduler
-    if model.__class__.__name__ == "WideResNet":
-        logger.info("Notice: switch to the WideResNet default scheduler.")
-        scheduler = StepLRforWRN(lr, epochs)
-    else:
-        scheduler = MultiStepLR(lr, step_size, gamma=0.1)
-    
+    scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))
+
     ## set up the data part
     # set the testset loader 
     testloader = DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)

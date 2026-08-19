@@ -1,0 +1,42 @@
+program: ERM.py
+method: bayes
+metric:
+  name: test_acc
+  goal: maximize
+
+# early_terminate:
+#   type: hyperband
+#   min_iter: 40
+#   eta: 2
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_boolean_flags}
+
+parameters:
+  model:
+    # value: "WideResNet16_8"
+    value: "ResNet18"
+  
+  epochs:
+    # value: 200
+    value: 40
+
+  lr:
+    # distribution: log_uniform_values
+    # min: 1e-1
+    # max: 3e-1
+    # value: 2e-1
+    values: [1e-3, 3e-3, 1e-2, 3e-2, 1e-1]
+
+  bs:
+    # values: [128, 256]
+    value: 256
+
+  wd:
+    value: 5e-4
+    
+  # seed:
+    # values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]

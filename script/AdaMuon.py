@@ -17,7 +17,7 @@ from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
 from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
 from utils.avgmeter import MetricTracker
-from utils.tools import evaluation
+from utils.tools import evaluation, get_weight_norm
 from utils.SAM import disable_running_stats, enable_running_stats, smooth_crossentropy
 from utils.AdaMuon import AdaMuon
 
@@ -122,14 +122,19 @@ def train(save_path: str,
         test_loss, test_acc, _ = evaluation(device, model, testloader)
         logger.info(f"test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}")
 
+        weight_norm = get_weight_norm(model)
+
         tracker.track({
             "test_loss": test_loss,
             "test_acc": test_acc,
+            "weight_norm": weight_norm,
             "epoch": epoch,
         })
+
         wandb.log({
             "test_loss": test_loss,
             "test_acc": test_acc,
+            "weight_norm": weight_norm,
             "epoch": epoch,
         })
 
@@ -231,6 +236,7 @@ def main():
     # get the logger
     logger = get_logger(__name__, args.verbose)
     # set the seed
+    args.seed = random.SystemRandom().randint(0, 2**31 - 1) # true random
     set_seed(args.seed)
     # set the device
     args.device = set_device(args.device)

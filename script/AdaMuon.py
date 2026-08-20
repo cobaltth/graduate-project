@@ -7,7 +7,7 @@ import torch
 import wandb
 import math
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from tqdm import tqdm
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -20,6 +20,7 @@ from utils.avgmeter import MetricTracker
 from utils.tools import evaluation, get_weight_norm
 from utils.SAM import disable_running_stats, enable_running_stats, smooth_crossentropy
 from utils.AdaMuon import AdaMuon
+from utils.sharpness import H_eigval
 
 
 def train(save_path: str,
@@ -90,6 +91,11 @@ def train(save_path: str,
 
     testloader = DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
+    subset_indices = torch.randperm(
+        len(trainset), generator=torch.Generator().manual_seed(42)
+    )[:2000].tolist()
+    subset = Subset(trainset, subset_indices)
+
     seeds = random.Random(seed).sample(range(10000000), k=epochs)
 
     tracker = MetricTracker()
@@ -124,11 +130,31 @@ def train(save_path: str,
 
         weight_norm = get_weight_norm(model)
 
+        model.eval()
+        
+        logger.info("Computing top-2 Hessian eigenvalue...")
+        loss_fn = nn.CrossEntropyLoss(reduction='sum')
+
+        top_eigenvalues = H_eigval(
+            device=device,
+            model=model,
+            dataset=subset,       # or dataset subset
+            loss_fn=loss_fn,
+            neigs=2,                # max eigenvalue만 필요하므로 2로 설정
+            physical_batch_size=256 # OOM 방지 및 메모리에 맞게 조절
+        )
+        eig_1 = top_eigenvalues[0].item()
+        eig_2 = top_eigenvalues[1].item()
+        logger.info(f"First Hessian Eigenvalue: {eig_1:.4f}")
+        logger.info(f"Second Hessian Eigenvalue: {eig_2:.4f}")
+
         tracker.track({
             "test_loss": test_loss,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
             "epoch": epoch,
+            "eig_1": eig_1,
+            "eig_2": eig_2
         })
 
         wandb.log({
@@ -136,6 +162,8 @@ def train(save_path: str,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
             "epoch": epoch,
+            "eig_1": eig_1,
+            "eig_2": eig_2
         })
 
         scheduler(optimizer, epoch)

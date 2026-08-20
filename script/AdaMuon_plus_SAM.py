@@ -7,7 +7,7 @@ import torch
 import wandb
 import math
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from tqdm import tqdm
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -20,6 +20,7 @@ from utils.avgmeter import MetricTracker
 from utils.tools import evaluation, get_weight_norm
 from utils.SAM import disable_running_stats, enable_running_stats, smooth_crossentropy
 from utils.AdaMuon_plus_SAM import AdaMuon_plus_SAM
+from utils.sharpness import H_eigval
 
 
 def train(save_path: str,
@@ -53,14 +54,7 @@ def train(save_path: str,
         batch_size: the batch size
         weight_decay: the weight decay
         momentum: the momentum
-        start_SAM: (더 이상 사용되지 않음) 과거 AdaMuon -> SAM 전환 시작 epoch.
-            optimizer switching을 없애면서 학습 로직에서는 쓰이지 않지만,
-            argparse 인터페이스(main()의 호출부)를 그대로 유지하기 위해
-            함수 시그니처에는 남겨둠.
-        end_SAM: (더 이상 사용되지 않음) 위와 동일한 이유로 유지되는 인자.
         rho: the rho for AdaMuon_plus_SAM's SAM-style perturbation
-            (기존에는 별도의 SAM optimizer가 사용하던 값. 이제는
-            AdaMuon_plus_SAM 생성 시 그대로 전달되어 사용됨)
         adaptive: the adaptive for AdaMuon_plus_SAM
         label_smoothing: the label smoothing
         step_size: the StepLR's step size
@@ -100,6 +94,11 @@ def train(save_path: str,
 
     ## set up the data part
     testloader = DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+    subset_indices = torch.randperm(
+        len(trainset), generator=torch.Generator().manual_seed(42)
+    )[:2000].tolist()
+    subset = Subset(trainset, subset_indices)
 
     seeds = random.Random(seed).sample(range(10000000), k=epochs)
 
@@ -143,11 +142,31 @@ def train(save_path: str,
 
         weight_norm = get_weight_norm(model)
 
+        model.eval()
+        
+        logger.info("Computing top-2 Hessian eigenvalue...")
+        loss_fn = nn.CrossEntropyLoss(reduction='sum')
+
+        top_eigenvalues = H_eigval(
+            device=device,
+            model=model,
+            dataset=subset,       # or dataset subset
+            loss_fn=loss_fn,
+            neigs=2,                # max eigenvalue만 필요하므로 2로 설정
+            physical_batch_size=256 # OOM 방지 및 메모리에 맞게 조절
+        )
+        eig_1 = top_eigenvalues[0].item()
+        eig_2 = top_eigenvalues[1].item()
+        logger.info(f"First Hessian Eigenvalue: {eig_1:.4f}")
+        logger.info(f"Second Hessian Eigenvalue: {eig_2:.4f}")
+
         tracker.track({
             "test_loss": test_loss,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
             "epoch": epoch,
+            "eig_1": eig_1,
+            "eig_2": eig_2
         })
 
         wandb.log({
@@ -155,6 +174,8 @@ def train(save_path: str,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
             "epoch": epoch,
+            "eig_1": eig_1,
+            "eig_2": eig_2
         })
 
         scheduler(optimizer, epoch)

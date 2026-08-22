@@ -103,7 +103,7 @@ def train(save_path: str,
 
     subset_indices = torch.randperm(
         len(trainset), generator=torch.Generator().manual_seed(42)
-    )[:2000].tolist()
+    )[:512].tolist()
     subset = Subset(trainset, subset_indices)
 
     # create the seeds for the first phase
@@ -186,7 +186,7 @@ def train(save_path: str,
             dataset=subset,       # or dataset subset
             loss_fn=loss_fn,
             neigs=2,                # max eigenvalue만 필요하므로 2로 설정
-            physical_batch_size=256 # OOM 방지 및 메모리에 맞게 조절
+            physical_batch_size=batch_size # OOM 방지 및 메모리에 맞게 조절
         )
         eig_1 = top_eigenvalues[0].item()
         eig_2 = top_eigenvalues[1].item()

@@ -17,7 +17,7 @@ from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
 from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
 from utils.avgmeter import MetricTracker
-from utils.tools import evaluation, get_weight_norm
+from utils.tools import evaluation, get_weight_norm, get_grad_norm
 from utils.SAM import SAM, disable_running_stats, enable_running_stats, smooth_crossentropy
 from utils.sharpness import H_eigval
 
@@ -128,6 +128,7 @@ def train(save_path: str,
         trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
         # train the model
         model.train()
+        grad_norm_sum = torch.zeros((), device=device)
         for batch_idx, (inputs, labels) in enumerate(tqdm(trainloader)):
             # set the inputs to device
             inputs, labels = inputs.to(device), labels.to(device)
@@ -146,6 +147,7 @@ def train(save_path: str,
                 ERM_optimizer.zero_grad()
                 # set the loss
                 loss.backward()
+                grad_norm_sum += get_grad_norm(model)
                 # set the optimizer
                 ERM_optimizer.step()
             else:
@@ -153,6 +155,7 @@ def train(save_path: str,
                 SAM_optimizer.zero_grad()
                 # backprop the loss
                 loss.backward()
+                grad_norm_sum += get_grad_norm(model)
                 SAM_optimizer.first_step(zero_grad=True)
                 # set the second step
                 disable_running_stats(model)
@@ -174,7 +177,7 @@ def train(save_path: str,
         logger.info(f"test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}")
 
         weight_norm = get_weight_norm(model)
-
+        grad_norm = (grad_norm_sum / len(trainloader)).item()
         model.eval()
         
         logger.info("Computing top-2 Hessian eigenvalue...")
@@ -197,6 +200,7 @@ def train(save_path: str,
             "test_loss": test_loss,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
+            "grad_norm": grad_norm,
             "epoch": epoch,
             "eig_1": eig_1,
             "eig_2": eig_2
@@ -206,6 +210,7 @@ def train(save_path: str,
             "test_loss": test_loss,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
+            "grad_norm": grad_norm,
             "epoch": epoch,
             "eig_1": eig_1,
             "eig_2": eig_2

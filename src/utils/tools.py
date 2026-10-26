@@ -109,3 +109,7 @@ def get_weight_norm(model):
             total_norm_sq += p.detach().norm(2).item() ** 2
 
     return total_norm_sq ** 0.5
+
+def get_grad_norm(model: nn.Module) -> torch.Tensor:
+    norms = [p.grad.detach().norm(2) for p in model.parameters() if p.grad is not None]
+    return torch.norm(torch.stack(norms), 2)

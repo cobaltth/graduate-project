@@ -17,7 +17,7 @@ from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
 from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
 from utils.avgmeter import MetricTracker
-from utils.tools import evaluation, get_weight_norm
+from utils.tools import evaluation, get_weight_norm, get_grad_norm
 from utils.SAM import disable_running_stats, enable_running_stats, smooth_crossentropy
 from utils.AdaMuon_plus_SAM import AdaMuon_plus_SAM
 from utils.sharpness import H_eigval
@@ -109,6 +109,7 @@ def train(save_path: str,
 
         trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
         model.train()
+        grad_norm_sum = torch.zeros((), device=device)                           
         for batch_idx, (inputs, labels) in enumerate(tqdm(trainloader)):
             inputs, labels = inputs.to(device), labels.to(device)
 
@@ -121,6 +122,7 @@ def train(save_path: str,
 
             optimizer.zero_grad()
             loss.backward()
+            grad_norm_sum += get_grad_norm(model)
             optimizer.first_step(zero_grad=True)  # w -> w + e(w)
 
             # --- 2nd forward-backward: w + e(w) 지점에서 gradient 재계산 ---
@@ -139,8 +141,9 @@ def train(save_path: str,
 
         test_loss, test_acc, _ = evaluation(device, model, testloader)
         logger.info(f"test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}")
-
+        
         weight_norm = get_weight_norm(model)
+        grad_norm = (grad_norm_sum / len(trainloader)).item()
 
         model.eval()
         
@@ -164,6 +167,7 @@ def train(save_path: str,
             "test_loss": test_loss,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
+            "grad_norm": grad_norm,
             "epoch": epoch,
             "eig_1": eig_1,
             "eig_2": eig_2
@@ -173,6 +177,7 @@ def train(save_path: str,
             "test_loss": test_loss,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
+            "grad_norm": grad_norm,
             "epoch": epoch,
             "eig_1": eig_1,
             "eig_2": eig_2

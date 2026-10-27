@@ -32,7 +32,7 @@ parameters:
 
   bs:
     # values: [128, 256]
-    value: 256
+    value: 512
 
   wd:
     value: 5e-4

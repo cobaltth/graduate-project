@@ -1,13 +1,8 @@
 program: AdaMuon_plus_SAM.py
 method: grid
 metric:
-  name: test_acc
+  name: final_test_acc      # 가장 긴 T의 마지막 test_acc
   goal: maximize
-
-# early_terminate:
-#   type: hyperband
-#   min_iter: 20
-#   eta: 3
 
 command:
   - ${env}
@@ -17,32 +12,35 @@ command:
 
 parameters:
   model:
-    # value: "WideResNet16_8"
     value: "ResNet18"
-  
-  epochs:
-    # value: 200
-    value: 40
+
+  total_epochs:
+    value: "30,60,90,120"    # 기존 epochs: 40 대체. 공유 trunk에서 분기할 총 epoch 목록
+
+  decay_ratio:
+    value: 0.2
+
+  warmup_epochs:
+    value: 4                # 기존 int(40 * 0.03) = 1과 동일
+
+  decay_type:
+    value: "1-sqrt"
 
   lr:
-    # distribution: log_uniform_values
-    # min: 2e-3
-    # max: 5e-3
-    value: 2e-3
+    # values: [2.0e-3, 3.0e-3, 5.0e-3]
+    value: 1.0e-3           # 소수점 표기 (2e-3은 문자열로 읽힘)
 
   bs:
-    # values: [128, 256]
     value: 256
 
   wd:
-    value: 5e-4
-    
+    value: 5.0e-4
+
   rho:
-    # values: [2.0, 5.0]
     value: 5.0
 
   adaptive:
     value: true
 
   seed:
-    values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    values: [1, 2, 3]

@@ -15,7 +15,7 @@ from data import prepare_dataset
 from model import prepare_model
 from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
-from utils.step_lr import WSDLR
+from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR, WSDLR
 from utils.avgmeter import MetricTracker
 from utils.tools import evaluation, get_weight_norm, get_grad_norm
 from utils.SAM import disable_running_stats, enable_running_stats, smooth_crossentropy

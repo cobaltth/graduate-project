@@ -3,19 +3,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import argparse
 import random
+import math
 import torch
 import wandb
-import math
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, Subset
 from tqdm import tqdm
-from torch.optim.lr_scheduler import LambdaLR
 
 from data import prepare_dataset
 from model import prepare_model
 from utils import get_datetime, set_logger, get_logger, set_seed, set_device, \
     log_settings, save_current_src
-from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR
+from utils.step_lr import StepLRforWRN, MultiStepLR, CosineWarmupLR, WSDLR
 from utils.avgmeter import MetricTracker
 from utils.tools import evaluation, get_weight_norm, get_grad_norm
 from utils.SAM import disable_running_stats, enable_running_stats, smooth_crossentropy
@@ -23,54 +22,60 @@ from utils.AdaMuon_plus_SAM import AdaMuon_plus_SAM
 from utils.sharpness import H_eigval
 
 
+def epoch_seed(seed: int, epoch: int) -> int:
+    """총 epoch 수와 무관하게 (seed, epoch)만으로 epoch별 seed 결정."""
+    return random.Random(seed * 1_000_003 + epoch).randrange(10_000_000)
+
+
+def save_ckpt(path, model, optimizer, epoch, seed, batch_size):
+    torch.save({
+        "epoch": epoch,            # 완료된 epoch 수 = 재개 시 시작 epoch
+        "seed": seed,
+        "batch_size": batch_size,
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+    }, path)
+
+
 def train(save_path: str,
           device: torch.device,
           model: nn.Module,
           trainset: Dataset,
           testset: Dataset,
-          epochs: int,
           lr: float,
           batch_size: int,
           weight_decay: float,
           momentum: float,
-          start_SAM: int,
-          end_SAM: int,
           rho: float,
           adaptive: bool,
           label_smoothing: float,
-          step_size: list,
-          step_saving: int,
+          start_epoch: int,
+          end_epoch: int,
+          warmup_epochs: int,
+          decay_start,
+          decay_epochs: int,
+          decay_type: str,
+          min_lr_ratio: float,
+          branch_epochs: list,
+          resume,
           seed: int) -> None:
     """train the model
 
     Args:
-        save_path: the path to save results
-        device: GPU or CPU
-        model: the model to train
-        trainset: the train dataset
-        testset: the test dataset
-        epochs: the epochs
-        lr: the learning rate
-        batch_size: the batch size
-        weight_decay: the weight decay
-        momentum: the momentum
-        rho: the rho for AdaMuon_plus_SAM's SAM-style perturbation
-        adaptive: the adaptive for AdaMuon_plus_SAM
-        label_smoothing: the label smoothing
-        step_size: the StepLR's step size
-        steps_saving: the steps to save the model
-        seed: the seed
+        start_epoch / end_epoch: 학습 구간 [start_epoch, end_epoch)
+        warmup_epochs: warmup 길이 (총 epoch과 무관한 고정값)
+        decay_start: decay 시작 epoch (None이면 stable 유지)
+        decay_epochs: decay 길이
+        branch_epochs: 완료 시점에 분기용 체크포인트를 저장할 epoch 목록
+        resume: 불러온 체크포인트 dict (없으면 None)
     """
     logger = get_logger(__name__)
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    
+    os.makedirs(save_path, exist_ok=True)
+
     ## set up the basic component for training
-    # put the model to GPU or CPU
     model = model.to(device)
 
-    # set the optimizer: 이제 학습 전체 구간(과거의 ERM phase + SAM phase)을
-    # AdaMuon_plus_SAM 하나로 진행한다.
+    # 학습 전체 구간을 AdaMuon_plus_SAM 하나로 진행
     params = list(filter(lambda p: p.requires_grad, model.parameters()))
     param_groups = [
         {
@@ -87,10 +92,20 @@ def train(save_path: str,
             "weight_decay": weight_decay,
         },
     ]
-
-    # 기존 SAM_optimizer가 사용하던 rho, adaptive를 그대로 AdaMuon_plus_SAM에 전달
     optimizer = AdaMuon_plus_SAM(param_groups, rho=rho, adaptive=adaptive)
-    scheduler = CosineWarmupLR(lr, epochs, int(epochs * 0.03))
+
+    if resume is not None:
+        model.load_state_dict(resume["model"])
+        optimizer.load_state_dict(resume["optimizer"])
+        logger.info(f"resumed from checkpoint at epoch {start_epoch}")
+
+    steps_per_epoch = math.ceil(len(trainset) / batch_size)  # drop_last=False 기준
+    scheduler = WSDLR(steps_per_epoch, warmup_epochs,
+                      decay_start_epoch=decay_start, decay_epochs=decay_epochs,
+                      decay_type=decay_type, min_lr_ratio=min_lr_ratio)
+    logger.info(f"WSD: epochs [{start_epoch}, {end_epoch}), warmup={warmup_epochs}, "
+                f"decay_start={decay_start}, decay_epochs={decay_epochs}, "
+                f"decay_type={decay_type}, branch_epochs={branch_epochs}")
 
     ## set up the data part
     testloader = DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
@@ -100,17 +115,17 @@ def train(save_path: str,
     )[:512].tolist()
     subset = Subset(trainset, subset_indices)
 
-    seeds = random.Random(seed).sample(range(10000000), k=epochs)
-
     tracker = MetricTracker()
-    for epoch in range(0, epochs):
+    cur_lr = optimizer.param_groups[0]["lr"]
+    for epoch in range(start_epoch, end_epoch):
         logger.info(f"######Epoch - {epoch}")
-        set_seed(seeds[epoch])
+        set_seed(epoch_seed(seed, epoch))
 
         trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
         model.train()
-        grad_norm_sum = torch.zeros((), device=device)                           
+        grad_norm_sum = torch.zeros((), device=device)
         for batch_idx, (inputs, labels) in enumerate(tqdm(trainloader)):
+            cur_lr = scheduler(optimizer, epoch * steps_per_epoch + batch_idx)
             inputs, labels = inputs.to(device), labels.to(device)
 
             # --- 1st forward-backward: w 지점의 gradient로 perturbation 계산 ---
@@ -140,63 +155,59 @@ def train(save_path: str,
         logger.info(tracker)
 
         test_loss, test_acc, _ = evaluation(device, model, testloader)
-        logger.info(f"test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}")
-        
+        logger.info(f"test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}, lr: {cur_lr:.6f}")
+
         weight_norm = get_weight_norm(model)
         grad_norm = (grad_norm_sum / len(trainloader)).item()
 
         model.eval()
-        
+
         logger.info("Computing top-2 Hessian eigenvalue...")
         loss_fn = nn.CrossEntropyLoss(reduction='sum')
 
         top_eigenvalues = H_eigval(
             device=device,
             model=model,
-            dataset=subset,       # or dataset subset
+            dataset=subset,
             loss_fn=loss_fn,
-            neigs=2,                # max eigenvalue만 필요하므로 2로 설정
-            physical_batch_size=batch_size # OOM 방지 및 메모리에 맞게 조절
+            neigs=2,
+            physical_batch_size=batch_size
         )
         eig_1 = top_eigenvalues[0].item()
         eig_2 = top_eigenvalues[1].item()
         logger.info(f"First Hessian Eigenvalue: {eig_1:.4f}")
         logger.info(f"Second Hessian Eigenvalue: {eig_2:.4f}")
 
-        tracker.track({
+        metrics = {
             "test_loss": test_loss,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
             "grad_norm": grad_norm,
             "epoch": epoch,
+            "lr": cur_lr,
             "eig_1": eig_1,
-            "eig_2": eig_2
-        })
+            "eig_2": eig_2,
+        }
+        tracker.track(metrics)
+        wandb.log(metrics)
 
-        wandb.log({
-            "test_loss": test_loss,
-            "test_acc": test_acc,
-            "weight_norm": weight_norm,
-            "grad_norm": grad_norm,
-            "epoch": epoch,
-            "eig_1": eig_1,
-            "eig_2": eig_2
-        })
+        if (epoch + 1) in branch_epochs:
+            ckpt_path = os.path.join(save_path, f"ckpt_ep{epoch + 1}.pt")
+            save_ckpt(ckpt_path, model, optimizer, epoch + 1, seed, batch_size)
+            logger.info(f"saved branch checkpoint: {ckpt_path}")
 
-        scheduler(optimizer, epoch)
-
-        if epoch == epochs - 1:
+        if epoch == end_epoch - 1:
             logger.info("save the final results")
             torch.save(model.state_dict(),
-                       os.path.join(save_path, f"model_final.pt"))
-            tracker.save_to_csv(os.path.join(save_path, f"train.csv"))
+                       os.path.join(save_path, "model_final.pt"))
+            tracker.save_to_csv(os.path.join(save_path, "train.csv"))
 
 
 def add_args() -> argparse.Namespace:
     """get arguments from the program.
 
     Returns:
-        return a dict containing all the program arguments 
+        return a dict containing all the program arguments
     """
     parser = argparse.ArgumentParser(
         description="simple verification")
@@ -212,9 +223,9 @@ def add_args() -> argparse.Namespace:
     parser.add_argument("--model", default="vgg16_bn", type=str,
                         help='the model name.')
     parser.add_argument('--epochs', default=160, type=int,
-                        help="set iteration number")
+                        help="total epochs (trunk run / 단일 WSD run). branch run에서는 무시")
     parser.add_argument("--lr", default=0.01, type=float,
-                        help="set the learning rate.")
+                        help="set the peak learning rate.")
     parser.add_argument("--bs", default=128, type=int,
                         help="set the batch size")
     parser.add_argument("--wd", default=1e-4, type=float,
@@ -222,9 +233,9 @@ def add_args() -> argparse.Namespace:
     parser.add_argument("--momentum", default=0.9, type=float,
                         help="set the momentum rate")
     parser.add_argument("--start_SAM", default=150, type=int,
-                        help="set the start epoch of SAM")
+                        help="(unused)")
     parser.add_argument("--end_SAM", default=160, type=int,
-                        help="set the end epoch of SAM")
+                        help="(unused)")
     parser.add_argument("--rho", default=2.0, type=float,
                         help="set the rho for SAM")
     parser.add_argument("--adaptive", action="store_true", dest="adaptive",
@@ -232,9 +243,23 @@ def add_args() -> argparse.Namespace:
     parser.add_argument("--label_smoothing", default=0.1, type=float,
                         help="set the label smoothing")
     parser.add_argument("--step_size", default=[80, 160], type=int, nargs="+",
-                        help="set the StepLR stepsize")
+                        help="(unused)")
     parser.add_argument("--step_saving", default=160, type=int,
-                        help="set the steps to save the model")
+                        help="(unused)")
+    ## WSD
+    parser.add_argument("--warmup_epochs", default=4, type=int,
+                        help="warmup epochs (총 epoch과 무관한 고정값)")
+    parser.add_argument("--decay_epochs", default=0, type=int,
+                        help="decay epochs. trunk run은 0 (stable 유지)")
+    parser.add_argument("--decay_type", default="1-sqrt", type=str,
+                        choices=["linear", "1-sqrt", "cosine"],
+                        help="decay shape")
+    parser.add_argument("--min_lr_ratio", default=0.0, type=float,
+                        help="decay 종료 시 lr / peak lr")
+    parser.add_argument("--branch_epochs", default=[], type=int, nargs="*",
+                        help="완료 시점에 분기용 체크포인트를 저장할 epoch 목록")
+    parser.add_argument("--resume", default=None, type=str,
+                        help="branch run: trunk 체크포인트 경로")
     # set if using debug mod
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose",
                         help="enable debug info output.")
@@ -244,16 +269,20 @@ def add_args() -> argparse.Namespace:
         os.makedirs(args.save_root)
 
     # set the save_path
-    exp_name = "-".join([get_datetime(),
-                         f"seed{args.seed}",
-                         f"{args.dataset}",
-                         f"{args.model}",
-                         f"epochs{args.epochs}",
-                         f"lr{args.lr}",
-                         f"bs{args.bs}",
-                         f"rho{args.rho}",
-                         f"adaptive{args.adaptive}",])
-    args.save_path = os.path.join(args.save_root, exp_name)
+    name_parts = [get_datetime(),
+                  f"{args.dataset}",
+                  f"{args.model}",
+                  f"lr{args.lr}",
+                  f"bs{args.bs}",
+                  f"rho{args.rho}",
+                  f"adaptive{args.adaptive}",
+                  f"wu{args.warmup_epochs}"]
+    if args.resume is not None:
+        ckpt_name = os.path.splitext(os.path.basename(args.resume))[0]
+        name_parts += [f"branch-{ckpt_name}", f"decay{args.decay_epochs}-{args.decay_type}"]
+    else:
+        name_parts += [f"epochs{args.epochs}", f"decay{args.decay_epochs}-{args.decay_type}"]
+    args.save_path = os.path.join(args.save_root, "-".join(name_parts))
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
 
@@ -264,29 +293,59 @@ def main():
     # get the args.
     args = add_args()
 
-    wandb.init(project="AdaMuon_plus_SAM", config=args)
+    # 같은 trunk에서 나온 run을 wandb group으로 묶음
+    if args.resume is not None:
+        trunk_dir = os.path.dirname(os.path.dirname(os.path.abspath(args.resume)))
+        wandb_group = os.path.basename(trunk_dir)
+    else:
+        wandb_group = os.path.basename(os.path.normpath(args.save_path))
+
+    wandb.init(project="AdaMuon_plus_SAM", config=args, group=wandb_group)
     config = wandb.config
 
+    list_keys = ("step_size", "branch_epochs")
     for key, value in config.as_dict().items():
-        if key == "step_size":
-            continue            
+        if key in list_keys:
+            continue
         setattr(args, key, value)
-    
     # parsing needed
-    if "step_size" in config:
-        args.step_size = [int(x) for x in config.step_size]
+    for key in list_keys:
+        if key in config:
+            setattr(args, key, [int(x) for x in config[key]])
 
     # set the logger
     set_logger(args.save_path)
     # get the logger
     logger = get_logger(__name__, args.verbose)
-    # set the seed
-    args.seed = random.SystemRandom().randint(0, 2**31 - 1) # true random
+
+    # set the schedule range / seed
+    resume = None
+    if args.resume is not None:  # branch (decay) run
+        assert args.decay_epochs > 0, "branch run은 --decay_epochs > 0 필요"
+        resume = torch.load(args.resume, map_location="cpu", weights_only=False)
+        assert resume["batch_size"] == args.bs, \
+            f"bs 불일치: trunk {resume['batch_size']} vs branch {args.bs}"
+        args.seed = resume["seed"]
+        start_epoch = resume["epoch"]
+        end_epoch = start_epoch + args.decay_epochs
+        decay_start = start_epoch
+        branch_epochs = []
+    else:  # trunk run (decay_epochs=0) 또는 단일 WSD run
+        args.seed = random.SystemRandom().randint(0, 2**31 - 1)  # true random
+        start_epoch, end_epoch = 0, args.epochs
+        decay_start = args.epochs - args.decay_epochs if args.decay_epochs > 0 else None
+        branch_epochs = args.branch_epochs
+        assert decay_start is None or all(e <= decay_start for e in branch_epochs), \
+            "branch_epochs는 decay 시작 이전이어야 함"
+    wandb.config.update({"seed": args.seed,
+                         "start_epoch": start_epoch,
+                         "end_epoch": end_epoch},
+                        allow_val_change=True)
     set_seed(args.seed)
     # set the device
     args.device = set_device(args.device)
     # save the current src
-    save_current_src(save_path = args.save_path)
+    save_current_src(save_path=args.save_path)
 
     # show the args.
     logger.info("#########parameters settings....")
@@ -306,26 +365,31 @@ def main():
 
     # train the model
     logger.info("#########training model....")
-    train(save_path = os.path.join(args.save_path, "train"),
-          device = args.device,
-          model = model,
-          trainset = trainset,
-          testset = testset,
-          epochs = args.epochs,
-          lr = args.lr,
-          batch_size = args.bs,
-          weight_decay = args.wd,
-          momentum = args.momentum,
-          start_SAM=args.start_SAM,
-          end_SAM=args.end_SAM,
-          rho = args.rho,
-          adaptive = args.adaptive,
-          label_smoothing = args.label_smoothing,
-          step_size = args.step_size,
-          step_saving = args.step_saving,
-          seed = args.seed)
+    train(save_path=os.path.join(args.save_path, "train"),
+          device=args.device,
+          model=model,
+          trainset=trainset,
+          testset=testset,
+          lr=args.lr,
+          batch_size=args.bs,
+          weight_decay=args.wd,
+          momentum=args.momentum,
+          rho=args.rho,
+          adaptive=args.adaptive,
+          label_smoothing=args.label_smoothing,
+          start_epoch=start_epoch,
+          end_epoch=end_epoch,
+          warmup_epochs=args.warmup_epochs,
+          decay_start=decay_start,
+          decay_epochs=args.decay_epochs,
+          decay_type=args.decay_type,
+          min_lr_ratio=args.min_lr_ratio,
+          branch_epochs=branch_epochs,
+          resume=resume,
+          seed=args.seed)
 
     wandb.finish()
+
 
 if __name__ == "__main__":
     main()

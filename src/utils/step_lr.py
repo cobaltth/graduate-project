@@ -1,6 +1,44 @@
 from typing import List
 import math
 
+class WSDLR:
+    """Warmup-Stable-Decay (step 단위).
+    warmup/stable 구간 lr은 총 학습 길이와 무관 → stable 체크포인트 공유 가능.
+    decay_start_epoch=None이면 stable 유지 (trunk run).
+    """
+    def __init__(self, steps_per_epoch, warmup_epochs,
+                 decay_start_epoch=None, decay_epochs=0,
+                 decay_type="1-sqrt", min_lr_ratio=0.0):
+        self.warmup = warmup_epochs * steps_per_epoch
+        self.decay_start = (None if decay_start_epoch is None
+                            else decay_start_epoch * steps_per_epoch)
+        self.decay = decay_epochs * steps_per_epoch
+        self.decay_type = decay_type
+        self.min_lr_ratio = min_lr_ratio
+
+    def factor(self, step):
+        if step < self.warmup:
+            return (step + 1) / self.warmup
+        if self.decay_start is None or step < self.decay_start:
+            return 1.0
+        p = min((step - self.decay_start) / self.decay, 1.0)
+        if self.decay_type == "linear":
+            f = 1.0 - p
+        elif self.decay_type == "1-sqrt":
+            f = 1.0 - math.sqrt(p)
+        elif self.decay_type == "cosine":
+            f = 0.5 * (1.0 + math.cos(math.pi * p))
+        else:
+            raise ValueError(self.decay_type)
+        return self.min_lr_ratio + (1.0 - self.min_lr_ratio) * f
+
+    def __call__(self, optimizer, step):
+        f = self.factor(step)
+        for g in optimizer.param_groups:
+            g.setdefault("initial_lr", g["lr"])
+            g["lr"] = g["initial_lr"] * f
+        return optimizer.param_groups[0]["lr"]
+
 class StepLRforWRN:
     def __init__(self, learning_rate: float, total_epochs: int, first_decay: float = 0.2, second_decay: float = 0.2, milestones=(3/10, 6/10)):
         """Step LR for WideResNet with configurable decay factors and epoch fractions.

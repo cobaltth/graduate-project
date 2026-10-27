@@ -167,29 +167,29 @@ def train(save_path: str,
 
         model.eval()
         
-        logger.info("Computing top-2 Hessian eigenvalue...")
-        loss_fn = nn.CrossEntropyLoss(reduction='sum')
+        # logger.info("Computing top-2 Hessian eigenvalue...")
+        # loss_fn = nn.CrossEntropyLoss(reduction='sum')
 
-        top_eigenvalues = H_eigval(
-            device=device,
-            model=model,
-            dataset=subset,       # or dataset subset
-            loss_fn=loss_fn,
-            neigs=2,                # max eigenvalue만 필요하므로 2로 설정
-            physical_batch_size=batch_size # OOM 방지 및 메모리에 맞게 조절
-        )
-        eig_1 = top_eigenvalues[0].item()
-        eig_2 = top_eigenvalues[1].item()
-        logger.info(f"First Hessian Eigenvalue: {eig_1:.4f}")
-        logger.info(f"Second Hessian Eigenvalue: {eig_2:.4f}")
+        # top_eigenvalues = H_eigval(
+        #     device=device,
+        #     model=model,
+        #     dataset=subset,       # or dataset subset
+        #     loss_fn=loss_fn,
+        #     neigs=2,                # max eigenvalue만 필요하므로 2로 설정
+        #     physical_batch_size=batch_size # OOM 방지 및 메모리에 맞게 조절
+        # )
+        # eig_1 = top_eigenvalues[0].item()
+        # eig_2 = top_eigenvalues[1].item()
+        # logger.info(f"First Hessian Eigenvalue: {eig_1:.4f}")
+        # logger.info(f"Second Hessian Eigenvalue: {eig_2:.4f}")
 
         tracker.track({
             "test_loss": test_loss,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
             "epoch": epoch,
-            "eig_1": eig_1,
-            "eig_2": eig_2
+            # "eig_1": eig_1,
+            # "eig_2": eig_2
         })
 
         wandb.log({
@@ -197,8 +197,8 @@ def train(save_path: str,
             "test_acc": test_acc,
             "weight_norm": weight_norm,
             "epoch": epoch,
-            "eig_1": eig_1,
-            "eig_2": eig_2
+            # "eig_1": eig_1,
+            # "eig_2": eig_2
         })
 
         # 두 optimizer 모두 매 epoch 갱신 (epoch 0 기준 병렬 스케줄링, 각자 lr/sam_lr로 anneal)

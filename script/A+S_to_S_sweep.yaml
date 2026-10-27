@@ -44,7 +44,7 @@ parameters:
 
   start_SAM:
     # value: 100
-    values: [0, 20, 40]
+    values: [0, 10, 20, 30, 40]
     
   end_SAM:
     value: 120
@@ -59,4 +59,4 @@ parameters:
     value: true
 
   seed:
-    values: [1, 2, 3]
+    values: [1, 2, 3, 4, 5]
